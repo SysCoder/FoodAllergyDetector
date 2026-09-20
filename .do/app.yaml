@@ -1,0 +1,47 @@
+# DigitalOcean App Platform spec.
+#
+# Deploys the FastAPI app as a single always-on Basic container. App Platform
+# detects Python from requirements.txt and builds with its buildpack, so the
+# process that runs here is the same `uvicorn main:app` used locally.
+#
+# HTTPS and a *.ondigitalocean.app hostname are provisioned automatically.
+#
+# The API key is NOT in this file. It is declared as a SECRET with no value and
+# must be set once in the App Platform console or with:
+#   doctl apps update <app-id> --spec .do/app.yaml
+#   (then set the value in Settings -> App-Level Environment Variables)
+name: foodallergydetector
+region: nyc
+
+services:
+  - name: web
+    environment_slug: python
+
+    github:
+      repo: SysCoder/FoodAllergyDetector
+      branch: main
+      deploy_on_push: true
+
+    # App Platform injects $PORT; bind all interfaces inside the container.
+    run_command: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    # $5/month, 512MB. The app measures ~63MB resident under concurrent load,
+    # so this is the right size rather than the cheapest one that fits.
+    instance_size_slug: basic-xxs
+    instance_count: 1
+
+    http_port: 8080
+
+    envs:
+      - key: TYPESAFE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+
+    health_check:
+      # Cheap and dependency-free: returns the tile definitions without
+      # touching Jev, so a failing health check means the app is down rather
+      # than the allergen model being unreachable.
+      http_path: /api/allergens
+      initial_delay_seconds: 20
+      period_seconds: 30
+      failure_threshold: 3

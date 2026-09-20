@@ -1,0 +1,28 @@
+# DigitalOcean Functions project for FoodAllergyDetector.
+#
+# One web function fronts the entire FastAPI app. `web: raw` is required:
+# the default `web: true` parses the request body into top-level event keys,
+# which destroys the raw bytes an ASGI application needs.
+#
+# Deploy with scripts/stage_functions.sh, which assembles a self-contained
+# package - `doctl serverless deploy` uploads only the project directory, so
+# the app modules must be copied in rather than referenced from the repo root.
+parameters: {}
+environment: {}
+packages:
+  - name: app
+    shared: false
+    environment:
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY}
+    functions:
+      - name: http
+        binary: false
+        main: ""
+        runtime: python:3.11
+        web: raw
+        webSecure: false
+        limits:
+          # Comfortably above the ~0.4s a request takes, and above the 63MB
+          # the app measures resident.
+          timeout: 30000
+          memory: 256

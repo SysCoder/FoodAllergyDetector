@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FoodAllergyDetector</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --border: #d8dce3;
+    --text: #1a1d23;
+    --muted: #5f6672;
+    --focus: #2563eb;
+
+    --detected-bg: #fdecec;
+    --detected-border: #d92d20;
+    --detected-text: #8f1d14;
+    --possible-bg: #fff6e5;
+    --possible-border: #b54708;
+    --possible-text: #7a3209;
+    --clear-bg: #f1f3f6;
+    --clear-border: #d8dce3;
+    --clear-text: #5f6672;
+    --unknown-bg: #f1f3f6;
+    --unknown-border: #9aa2b1;
+    --unknown-text: #475060;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --panel: #1c1f25;
+      --border: #333844;
+      --text: #f0f2f5;
+      --muted: #a3abb9;
+      --focus: #60a5fa;
+
+      --detected-bg: #3a1614;
+      --detected-border: #f97066;
+      --detected-text: #ffb4ad;
+      --possible-bg: #3a2610;
+      --possible-border: #fdb022;
+      --possible-text: #fed7aa;
+      --clear-bg: #22262e;
+      --clear-border: #333844;
+      --clear-text: #98a1b0;
+      --unknown-bg: #22262e;
+      --unknown-border: #6b7385;
+      --unknown-text: #aab2c0;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 16px 64px;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 0.95rem; }
+
+  .warning {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--possible-bg);
+    border: 1px solid var(--possible-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 24px;
+    font-size: 0.88rem;
+    color: var(--possible-text);
+  }
+  .warning strong { display: block; }
+
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    padding: 14px;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.95rem;
+  }
+  textarea:focus-visible, button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    margin: 12px 0 24px;
+    flex-wrap: wrap;
+  }
+  button {
+    padding: 11px 22px;
+    font: inherit; font-weight: 600;
+    color: #fff; background: #1f2937;
+    border: none; border-radius: 8px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #111827; }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  @media (prefers-color-scheme: dark) {
+    button { background: #3b82f6; }
+    button:hover:not(:disabled) { background: #2563eb; }
+  }
+  .status { color: var(--muted); font-size: 0.88rem; }
+  .status[data-kind="error"] { color: var(--detected-border); font-weight: 600; }
+
+  .fallback-warning {
+    display: none;
+    gap: 10px; align-items: flex-start;
+    background: var(--detected-bg);
+    border: 2px solid var(--detected-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 0 0 18px;
+    font-size: 0.88rem;
+    color: var(--detected-text);
+  }
+  .fallback-warning.on { display: flex; }
+  .fallback-warning strong { display: block; margin-bottom: 2px; }
+
+  /* In fallback mode an unflagged tile is not evidence of absence. */
+  body[data-mode="fallback"] .tile[data-status="clear"] {
+    border-style: dashed;
+    border-color: var(--unknown-border);
+  }
+  body[data-mode="fallback"] .tile[data-status="clear"] .state { color: var(--unknown-text); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 560px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .tile {
+    border: 1px solid var(--clear-border);
+    background: var(--clear-bg);
+    border-radius: 10px;
+    padding: 14px 12px;
+    min-height: 104px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .tile .label { font-weight: 650; font-size: 0.95rem; line-height: 1.25; }
+  .tile .state {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .tile .icon { font-size: 0.95rem; line-height: 1; }
+  .tile .score { font-size: 0.75rem; color: var(--muted); margin-top: auto; font-variant-numeric: tabular-nums; }
+  .tile:has(.source) .score { margin-top: 0; }
+
+  .tile[data-status="detected"] {
+    background: var(--detected-bg); border-color: var(--detected-border);
+  }
+  .tile[data-status="detected"] .label,
+  .tile[data-status="detected"] .state { color: var(--detected-text); }
+  .tile[data-status="detected"] { border-width: 2px; }
+
+  .tile[data-status="possible"] {
+    background: var(--possible-bg); border-color: var(--possible-border);
+  }
+  .tile[data-status="possible"] .label,
+  .tile[data-status="possible"] .state { color: var(--possible-text); }
+
+  .tile[data-status="clear"] .state { color: var(--clear-text); }
+
+  .tile[data-status="unknown"],
+  .tile[data-status="idle"] {
+    background: var(--unknown-bg); border-color: var(--unknown-border);
+    border-style: dashed;
+  }
+  .tile[data-status="unknown"] .state,
+  .tile[data-status="idle"] .state { color: var(--unknown-text); }
+
+  .group-title {
+    font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted);
+    margin: 26px 0 10px;
+  }
+  .group-title:first-of-type { margin-top: 0; }
+  .group-title .note { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+  .tile .source {
+    font-size: 0.75rem; line-height: 1.35;
+    color: var(--muted);
+    border-top: 1px dashed var(--border);
+    padding-top: 6px; margin-top: 6px;
+    overflow-wrap: anywhere;
+  }
+  .tile .source .from { opacity: 0.75; }
+  .tile[data-status="detected"] .source,
+  .tile[data-status="possible"] .source { border-top-color: currentColor; }
+
+  .legend {
+    margin-top: 22px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 0.82rem;
+  }
+  .legend p { margin: 0 0 6px; }
+  .credit {
+    margin: 16px 0 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+  .credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>FoodAllergyDetector</h1>
+  <p class="sub">Paste a recipe. The nine major US allergens are checked below.</p>
+
+  <label class="sr-only" for="recipe">Recipe text</label>
+  <textarea id="recipe" placeholder="Paste the full recipe here, including the ingredient list…"></textarea>
+
+  <div class="row">
+    <button id="analyze" type="button">Analyze recipe</button>
+    <span class="status" id="status" role="status" aria-live="polite"></span>
+  </div>
+
+  <div class="fallback-warning" id="fallbackwarning" role="alert">
+    <span aria-hidden="true">⚠️</span>
+    <span id="fallbackwarningtext"></span>
+  </div>
+
+  <h2 class="group-title">Major allergens <span class="note">(FDA Big 9)</span></h2>
+  <div class="grid" id="grid"></div>
+
+  <h2 class="group-title">Meat &amp; poultry <span class="note">— dietary, not allergens</span></h2>
+  <div class="grid" id="meatgrid"></div>
+
+  <div class="legend">
+    <p><strong>Detected</strong> — the model judged this allergen present.</p>
+    <p><strong>Possible</strong> — uncertain, or only implied. Treat as present until you verify.</p>
+    <p><strong>Not found</strong> — no evidence in the text. This is not a guarantee of absence.</p>
+    <p id="modelinfo"></p>
+  </div>
+
+  <div class="warning" role="note">
+    <span aria-hidden="true">⚠️</span>
+    <span>
+      <strong>Use this as a supplemental check only.</strong>
+      This tool is not a primary source for allergen information. Always read the
+      actual product labels and ask the kitchen or manufacturer directly. An
+      allergen can be present without appearing anywhere in the recipe text.
+    </span>
+  </div>
+
+  <p class="credit">
+    Ingredient vocabulary includes data from
+    <a href="https://openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a>,
+    used under the
+    <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">Open Database License v1.0</a>.
+    Open Food Facts does not guarantee the accuracy of its data.
+    Allergen judgements are made by TypeSafe&rsquo;s Jev model, not by Open Food Facts.
+  </p>
+</main>
+
+<script>
+const STATES = {
+  idle:     { icon: "·", text: "Not checked" },
+  detected: { icon: "✕", text: "Detected" },
+  possible: { icon: "!", text: "Possible" },
+  clear:    { icon: "✓", text: "Not found" },
+  nomatch:  { icon: "·", text: "No keyword match" },
+  unknown:  { icon: "?", text: "Not checked" },
+};
+
+// Resolve API calls against wherever this page is served from, not the domain
+// root. Under uvicorn the page is at "/" and BASE is "", so requests go to
+// "/api/...". On a DigitalOcean Functions web URL the page is served from
+// /api/v1/web/<namespace>/<package>/<fn>, and an absolute "/api/analyze" would
+// drop that prefix and 404. Deriving the base keeps one build working on both.
+const BASE = location.pathname
+  .replace(/\/[^/]*\.[^/]*$/, "")   // drop a trailing filename (/index.html)
+  .replace(/\/+$/, "");             // drop trailing slashes
+
+const api = (path) => BASE + path;
+
+const gridEl = document.getElementById("grid");
+const meatGridEl = document.getElementById("meatgrid");
+const statusEl = document.getElementById("status");
+const buttonEl = document.getElementById("analyze");
+const recipeEl = document.getElementById("recipe");
+const modelInfoEl = document.getElementById("modelinfo");
+const fallbackEl = document.getElementById("fallbackwarning");
+const fallbackTextEl = document.getElementById("fallbackwarningtext");
+
+// Set while rendering so tiles can word themselves differently in fallback mode.
+let renderMode = "jev";
+
+let groups = { allergens: [], meats: [] };
+
+function makeTile(item) {
+  // A keyword miss is weaker evidence than a model "not found", so it says so.
+  const key =
+    renderMode === "fallback" && item.status === "clear" ? "nomatch" : item.status;
+  const state = STATES[key] || STATES.unknown;
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  tile.dataset.status = item.status;
+
+  const label = document.createElement("div");
+  label.className = "label";
+  label.textContent = item.label;
+
+  const stateEl = document.createElement("div");
+  stateEl.className = "state";
+  const icon = document.createElement("span");
+  icon.className = "icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = state.icon;
+  const stateText = document.createElement("span");
+  stateText.textContent = state.text;
+  stateEl.append(icon, stateText);
+
+  const score = document.createElement("div");
+  score.className = "score";
+  score.textContent =
+    typeof item.probability === "number"
+      ? `confidence ${Math.round(item.probability * 100)}%`
+      : "\u00a0";
+
+  tile.append(label, stateEl, score);
+
+  // The source is supporting evidence for a flag, never a flag on its own.
+  let ariaSource = "";
+  if (item.source) {
+    const source = document.createElement("div");
+    source.className = "source";
+    if (item.source.implied) {
+      source.textContent = "not listed — implied by the dish";
+      ariaSource = ", implied by the dish rather than listed";
+    } else if (item.source.texts && item.source.texts.length) {
+      // More than one ingredient can genuinely contribute; name them all
+      // rather than picking one arbitrarily.
+      const joined = item.source.texts.join(", ");
+      const from = document.createElement("span");
+      from.className = "from";
+      from.textContent = "from: ";
+      source.append(from, document.createTextNode(joined));
+      ariaSource = `, from ${joined}`;
+    }
+    if (source.childNodes.length) tile.append(source);
+  }
+
+  // Colour is never the only carrier of meaning: the state word is always present.
+  tile.setAttribute("aria-label", `${item.label}: ${state.text}${ariaSource}`);
+  return tile;
+}
+
+function renderInto(el, items) {
+  el.innerHTML = "";
+  for (const item of items) el.append(makeTile(item));
+}
+
+function showAll(status) {
+  renderMode = "jev";
+  delete document.body.dataset.mode;
+  fallbackEl.classList.remove("on");
+  const blank = (list) => list.map((a) => ({ ...a, status, probability: null, source: null }));
+  renderInto(gridEl, blank(groups.allergens));
+  renderInto(meatGridEl, blank(groups.meats));
+}
+
+function setStatus(message, kind) {
+  statusEl.textContent = message;
+  if (kind) statusEl.dataset.kind = kind;
+  else delete statusEl.dataset.kind;
+}
+
+async function loadGroups() {
+  try {
+    const res = await fetch(api("/api/allergens"));
+    const data = await res.json();
+    groups = { allergens: data.allergens, meats: data.meats };
+    showAll("idle");
+  } catch {
+    setStatus("Could not load the checklist. Reload the page.", "error");
+  }
+}
+
+function summarise(items, noun) {
+  const hit = items.filter((r) => r.status === "detected").length;
+  const maybe = items.filter((r) => r.status === "possible").length;
+  if (!hit && !maybe) return `No ${noun} detected`;
+  const parts = [];
+  if (hit) parts.push(`${hit} ${noun}${hit === 1 ? "" : "s"} detected`);
+  if (maybe) parts.push(`${maybe} possible`);
+  return parts.join(", ");
+}
+
+async function analyze() {
+  const recipe = recipeEl.value.trim();
+  if (!recipe) {
+    setStatus("Paste a recipe first.", "error");
+    recipeEl.focus();
+    return;
+  }
+
+  buttonEl.disabled = true;
+  setStatus("Checking…");
+  modelInfoEl.textContent = "";
+
+  try {
+    const res = await fetch(api("/api/analyze"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipe }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      // No local fallback exists, so a failure must read as "unchecked",
+      // never as quietly empty tiles.
+      showAll("unknown");
+      setStatus(data.message || "Something went wrong. Nothing was checked.", "error");
+      return;
+    }
+
+    renderMode = data.mode === "fallback" ? "fallback" : "jev";
+    document.body.dataset.mode = renderMode;
+    if (data.warning) {
+      fallbackTextEl.textContent = "";
+      const heading = document.createElement("strong");
+      heading.textContent = "Offline keyword check only \u2014 not the full allergen model.";
+      fallbackTextEl.append(heading, document.createTextNode(data.warning));
+      fallbackEl.classList.add("on");
+    } else {
+      fallbackEl.classList.remove("on");
+    }
+
+    renderInto(gridEl, data.allergens);
+    renderInto(meatGridEl, data.meats);
+
+    const meatHits = data.meats.filter((r) => r.status !== "clear").length;
+    let summary = summarise(data.allergens, "allergen") + ".";
+    if (meatHits) {
+      summary += " " + data.meats
+        .filter((r) => r.status !== "clear")
+        .map((r) => r.label)
+        .join(", ") + " present.";
+    }
+    setStatus(summary);
+    modelInfoEl.textContent = data.model
+      ? `Checked by ${data.model}.`
+      : "Checked by offline keyword matching, not the allergen model.";
+  } catch {
+    showAll("unknown");
+    setStatus("Network error. Nothing was checked.", "error");
+  } finally {
+    buttonEl.disabled = false;
+  }
+}
+
+buttonEl.addEventListener("click", analyze);
+recipeEl.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") analyze();
+});
+loadGroups();
+</script>
+</body>
+</html>
