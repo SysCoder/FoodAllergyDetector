@@ -8,6 +8,13 @@ backend, and TypeSafe's Jev model doing the judging.
 > information. Always read product labels and ask the kitchen or manufacturer.
 > An allergen can be present without appearing anywhere in the recipe text.
 
+## Live
+
+<https://faas-sfo3-7872a1dd.doserverless.co/api/v1/web/fn-a6ef956d-73a5-4702-b7c9-d9286272d233/app/http>
+
+Running on DigitalOcean Functions. The first request after a period of
+inactivity takes a few seconds while the container starts.
+
 ## Visuals
 
 ![The FoodAllergyDetector interface](FoodAllergyDetector.png)
@@ -124,6 +131,14 @@ program that reads it.
   can drift from them.
 - Nothing here is a substitute for reading the label.
 
+## License
+
+Code is released under the [MIT License](LICENSE).
+
+The MIT License covers the software only. `vocabulary.json` is a derived
+database under the Open Database License v1.0 and keeps those terms, as
+described in "Data and attribution" above.
+
 ## Status
 
-Personal project, actively used. Not accepting contributions.
+Personal project. Not accepting contributions.
